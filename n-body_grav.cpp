@@ -2,18 +2,18 @@
 #include <cmath>
 #include <fstream>
 #include <iomanip>
+//#include <tbb/tbb.h>
+
 using namespace std;
 
 
 //Position
 void update_pos(vector<double>& x,vector<double>& y,vector<double>& z, vector<double>& vx,vector<double>& vy,vector<double>& vz,vector<double>& accx,vector<double>& accy, vector<double>& accz){
 	
-	for(int i= 0; i < x.size(); l++){	
-	
-	x[i]=x[i] + vx[i] * (dt) + 0.5 * accx[i] * (dt)*(dt);
-	y[i]=y[i] + vy[i] * (dt) + 0.5 * accy[i] * (dt)*(dt);
-	z[i]=z[i] + vz[i] * (dt) + 0.5 * accz[i] * (dt)*(dt); 
-	
+	for(int i= 0; i < x.size(); l++){
+		x[i]=x[i] + vx[i] * (dt) + 0.5 * accx[i] * (dt)*(dt);
+		y[i]=y[i] + vy[i] * (dt) + 0.5 * accy[i] * (dt)*(dt);
+		z[i]=z[i] + vz[i] * (dt) + 0.5 * accz[i] * (dt)*(dt); 
 	}
 	
 };
@@ -23,7 +23,8 @@ void get_acc(vector<double>& x,vector<double>& y,vector<double>& z, vector<doubl
 	
         vector<double> force_x(x.size());
 		vector<double> force_y(y.size());
-		vector<double> force_z(z.size());      
+		vector<double> force_z(z.size());  
+		
 
 	for(int i= 0; i < x.size(); i++){
 		//Classical mechanics F = mc | Average acceleration delta_v/delta_t 
@@ -57,7 +58,7 @@ void update_vel(vector<double>& vx,vector<double>& vy,vector<double>& vz,vector<
 		avg_accx = (prev_accx[i] + accx[i])/2;
 		avg_accy = (prev_accy[i] + accy[i])/2;
 		avg_accz = (prev_accz[i] + accz[i])/2;
-		//vel += avg_acc * time_step;
+		//vel += avg_acc * dt;
 		vx[i] += avg_accx[i] * dt;
 		vy[i] += avg_accy[i] * dt;
 		vz[i] += avg_accz[i] * dt;
@@ -71,24 +72,33 @@ void update_vel(vector<double>& vx,vector<double>& vy,vector<double>& vz,vector<
    */
    
 void velocity_Verlet(vector<double> x, vector<double> y, vector<double> z, vector<double> vx, vector<double> vy, vector<double> vz, vector<double> vm, double dt,int time_steps, char *output_file) {
-
+    //tbb::task_scheduler_init scheduler(1);
     vector<double> accx(x.size());
-    vector<double> accy(x.size());
-    vector<double> accz(x.size());
+    vector<double> accy(y.size());
+    vector<double> accz(z.size());
     vector<double> prev_accx(x.size());
-    vector<double> prev_accy(x.size());
-    vector<double> prev_accz(x.size());
+    vector<double> prev_accy(y.size());
+    vector<double> prev_accz(z.size());
 
     ofstream fout;
     fout.open(output_file);
     fout << "x, " << "y, " << "z, " << "vx, " << "vy, "<< "vz, "<< "vm " << endl;
     get_acc(x,y,z,accx,accy,accz);
 	
-	for (int i = 0; i < time_steps; i++){
-		update_pos(x,y,z,vx,vy,vz,accx,accy,accz);
-        get_acc(x,y,z,accx,accy,accz);
-		update_vel(vx,vy,vz,accx,accy,accz,prev_accx,prev_accy,prev_accz);
-    }
+	/* OPEN MPI */
+    //#pragma omp parallel for 
+
+    /* TBB */
+   //tbb::parallel_for(tbb::blocked_range<int>(0, x.size()),
+   //[&] (const tbb::blocked_range<int>& time_steps) {
+		for (int i = time_steps.begin(); i < time_steps.end(); i++){
+			//#pragma omp atomic ??
+			update_pos(x,y,z,vx,vy,vz,accx,accy,accz);
+			get_acc(x,y,z,accx,accy,accz);
+			update_vel(vx,vy,vz,accx,accy,accz,prev_accx,prev_accy,prev_accz);
+		}
+	//}
+	//);
 	
 	fout.close();
 }
@@ -102,7 +112,7 @@ int main(int argc, char* argv[]) {
 	ifstream initial_state_file(initial_state_file_arg);
 	 
 	if (!initial_state_file) {
-		cout << "Can't open initial_state_file\n";
+		cout << "Can't open the initial_state_file\n";
 	}
 
 	int n;
@@ -130,7 +140,6 @@ velocity_Verlet(x,y,z,vx,vy,vz,vm,dt,time_steps,output_file);
 
 return 0;
 }
-
 
 
 
